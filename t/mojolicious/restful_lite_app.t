@@ -5,6 +5,7 @@ BEGIN { $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll' }
 use Test::More;
 use Mojo::JSON qw(false true);
 use Mojolicious::Lite;
+use Mojo::IOLoop;
 use Test::Mojo;
 
 any [qw(POST PUT)] => '/json/echo' => sub {
@@ -20,6 +21,13 @@ get '/accepts' => sub {
 get '/wants_json' => sub {
   my $c = shift;
   $c->render(json => {wants_json => \$c->accepts('', 'json')});
+};
+
+get '/promise_json' => sub {
+  my $c = shift;
+  my $promise = Mojo::Promise->new;
+  Mojo::IOLoop->timer(0.5 => sub { $promise->resolve( +{ message =>'Yo' }) });
+  $c->render(json => $promise);
 };
 
 under '/rest';
@@ -97,6 +105,10 @@ $t->get_ok('/wants_json.xml')->status_is(200)->json_is({wants_json => false});
 # Accept "json"
 $t->get_ok('/wants_json' => {Accept => 'application/json'})->status_is(200)
   ->json_is({wants_json => true});
+
+# Transparently renders a Promise as though it is its fulfilled value
+$t->get_ok('/promise_json' => {Accept => 'application/json'})->status_is(200)
+  ->json_is({message => 'Yo'});
 
 # Ajax
 my $ajax = 'text/html;q=0.1,application/json';
